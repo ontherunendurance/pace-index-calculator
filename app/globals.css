@@ -1,0 +1,41 @@
+:root {
+  color-scheme: light;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #f6f7f9;
+  color: #111;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+input, select, button {
+  font: inherit;
+}
+
+input, select {
+  background: #fff;
+  color: #111;
+  border: 1px solid #bbb;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+label span {
+  color: #111;
+  font-weight: 600;
+}
+
+table th {
+  color: #111;
+  font-weight: 700;
+}
+
+table td {
+  color: #111;
+}
+
+a { color: inherit; }
