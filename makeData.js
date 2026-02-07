@@ -1,91 +1,96 @@
 const fs = require("fs");
 const Papa = require("papaparse");
 
-// Read CSV
 const csv = fs.readFileSync("OTR Pace.xlsx - VDOT.csv", "utf8");
-const parsed = Papa.parse(csv, { skipEmptyLines: true });
-const rows = parsed.data.slice(1);
+const parsed = Papa.parse(csv, { skipEmptyLines: false });
+const all = parsed.data;
+
+// Keep ONLY rows that have a numeric Pace Index in column L (index 11)
+const rows = all.filter((r) => {
+  const v = Number(String(r?.[11] ?? "").trim());
+  return Number.isFinite(v) && v > 0;
+});
 
 /**
- * Parse a time-like value into SECONDS (may be fractional),
- * supporting:
- * - mm:ss
- * - mm:ss.cc
- * - mm:ss:cc   (your CSV like 5:49:13 meaning 5:49.13)
- * - Excel day fractions (0 < x < 1)
- * - decimal minutes (6.5 => 6:30)
+ * Parse mm:ss or mm:ss:cc (centiseconds)
+ * Examples:
+ *  - 18:05 -> 1085 sec
+ *  - 18:05:00 -> 1085.00 sec
+ *  - 5:49:13 -> 349.13 sec
  */
-function parseToSeconds(v) {
+function parseMsCsToSeconds(v) {
   if (v === undefined || v === null) return null;
-
-  const s = v.toString().trim();
+  const s = String(v).trim();
   if (!s) return null;
 
-  // If it contains ":", it's time-ish
   if (s.includes(":")) {
     const parts = s.split(":").map((x) => x.trim());
-
-    // Support mm:ss.cc where seconds contain decimals
-    if (parts.length === 2 && parts[1].includes(".")) {
-      const mm = Number(parts[0]);
-      const sec = Number(parts[1]);
-      if (Number.isNaN(mm) || Number.isNaN(sec)) return null;
-      return mm * 60 + sec;
-    }
-
     const nums = parts.map(Number);
     if (nums.some((n) => Number.isNaN(n))) return null;
 
-    // mm:ss
     if (nums.length === 2) {
-      return nums[0] * 60 + nums[1];
+      const [mm, ss] = nums;
+      return mm * 60 + ss;
     }
-
-    // mm:ss:cc  (centiseconds)
     if (nums.length === 3) {
-      const mm = nums[0];
-      const ss = nums[1];
-      const cc = nums[2]; // hundredths
+      const [mm, ss, cc] = nums; // cc = hundredths
       return mm * 60 + ss + cc / 100;
     }
-
-    // If some row has h:mm:ss (rare), you can extend later.
     return null;
   }
 
-  // Numeric fallback
+  // numeric fallback
   const num = Number(s);
   if (Number.isNaN(num)) return null;
 
-  // Excel time as fraction of a day
-  if (num > 0 && num < 1) {
-    return num * 86400;
-  }
+  // excel day fraction
+  if (num > 0 && num < 1) return num * 86400;
 
-  // Otherwise treat as decimal minutes
+  // decimal minutes
   return num * 60;
 }
 
 /**
- * Ensure final stored value is an integer number of seconds.
- * Also fixes "centiseconds accidentally treated as seconds" cases:
- * if a value is way too large to be seconds for a split/pace,
- * interpret it as centiseconds and divide by 100.
+ * Parse h:mm:ss (used for Half/Marathon predictions)
+ * Examples:
+ *  - 1:22:59 -> 4979 sec
+ *  - 2:53:17 -> 10397 sec
  */
-function toWholeSeconds(v) {
-  const sec = parseToSeconds(v);
-  if (sec === null) return null;
+function parseHmsToSeconds(v) {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim();
+  if (!s) return null;
 
-  // If it's huge, it's almost certainly centiseconds already (e.g., 20953)
-  // A pace/split in seconds should almost never exceed 2000 for our use.
-  const normalized = sec > 2000 ? sec / 100 : sec;
+  if (s.includes(":")) {
+    const parts = s.split(":").map((x) => x.trim());
+    const nums = parts.map(Number);
+    if (nums.some((n) => Number.isNaN(n))) return null;
 
-  return Math.round(normalized);
+    if (nums.length === 3) {
+      const [h, m, sec] = nums;
+      return h * 3600 + m * 60 + sec;
+    }
+    if (nums.length === 2) {
+      const [m, sec] = nums;
+      return m * 60 + sec;
+    }
+    return null;
+  }
+
+  const num = Number(s);
+  if (Number.isNaN(num)) return null;
+  if (num > 0 && num < 1) return num * 86400;
+  return num * 60;
+}
+
+function whole(sec) {
+  if (sec == null) return null;
+  return Math.round(sec);
 }
 
 const data = rows
   .map((r, i) => {
-    const paceIndex = Number(r[11]); // Column L (0-based index 11)
+    const paceIndex = Number(String(r[11]).trim());
     if (!Number.isFinite(paceIndex)) return null;
 
     return {
@@ -93,40 +98,44 @@ const data = rows
       paceIndex,
       label: `PI ${paceIndex}`,
 
+      // Race Predictions (TOTAL race time)
       pred: {
-  m800: toWholeSeconds(r[2]),
-  mile: toWholeSeconds(r[3]),
-  twoMile: toWholeSeconds(r[4]),
-  k5: toWholeSeconds(r[5]),
-  half: toWholeSeconds(r[6]),
-  marathon: toWholeSeconds(r[7]),
-},
+        m800: whole(parseMsCsToSeconds(r[2])),
+        mile: whole(parseMsCsToSeconds(r[3])),
+        twoMile: whole(parseMsCsToSeconds(r[4])),
+        k5: whole(parseMsCsToSeconds(r[5])),
+        half: whole(parseHmsToSeconds(r[6])),
+        marathon: whole(parseHmsToSeconds(r[7])),
+      },
 
+      // Race Paces (/mi) from sheet
       pace: {
-        mile: toWholeSeconds(r[8]),
-        twoMile: toWholeSeconds(r[9]),
-        k5: toWholeSeconds(r[10]),
+        mile: whole(parseMsCsToSeconds(r[8])),
+        twoMile: whole(parseMsCsToSeconds(r[9])),
+        k5: whole(parseMsCsToSeconds(r[10])),
       },
 
+      // Critical Velocity reps (these appear to be ms:cs format in your export)
       cv: {
-        m100: toWholeSeconds(r[32]),
-        m400: toWholeSeconds(r[31]),
-        m800: toWholeSeconds(r[30]),
-        m1000: toWholeSeconds(r[29]),
-        m1200: toWholeSeconds(r[28]),
+        m100: whole(parseMsCsToSeconds(r[32])),
+        m400: whole(parseMsCsToSeconds(r[31])),
+        m800: whole(parseMsCsToSeconds(r[30])),
+        m1000: whole(parseMsCsToSeconds(r[29])),
+        m1200: whole(parseMsCsToSeconds(r[28])),
       },
 
+      // 2 Mile pace repeats (ms:cs)
       speed2m: {
-        m100: toWholeSeconds(r[37]),
-        m200: toWholeSeconds(r[36]),
-        m300: toWholeSeconds(r[35]),
-        m400: toWholeSeconds(r[34]),
-        m600: toWholeSeconds(r[33]),
+        m100: whole(parseMsCsToSeconds(r[37])),
+        m200: whole(parseMsCsToSeconds(r[36])),
+        m300: whole(parseMsCsToSeconds(r[35])),
+        m400: whole(parseMsCsToSeconds(r[34])),
+        m600: whole(parseMsCsToSeconds(r[33])),
       },
     };
   })
   .filter(Boolean)
-  .filter((x) => x.pace && Number.isFinite(x.pace.k5));
+  .filter((x) => Number.isFinite(x.pred?.k5) && Number.isFinite(x.pace?.k5));
 
 fs.mkdirSync("data", { recursive: true });
 fs.writeFileSync("data/paces.json", JSON.stringify(data, null, 2));
