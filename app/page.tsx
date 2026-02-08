@@ -439,7 +439,16 @@ export default function Page() {
 
                 <label style={{ display: "grid", gap: 6 }}>
                   <span>Time (mm:ss or h:mm:ss)</span>
-                  <input value={timeStr} onChange={(e) => setTimeStr(e.target.value)} placeholder="e.g., 16:45" inputMode="numeric" style={{ minWidth: 220 }} />
+                  <input
+  value={timeStr}
+  onChange={(e) => setTimeStr(e.target.value)}
+  placeholder="e.g., 16:45"
+  inputMode="text"
+  pattern="[0-9:]*"
+  autoComplete="off"
+  ...
+/>
+
                 </label>
               </>
             ) : (
