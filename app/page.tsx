@@ -446,7 +446,6 @@ export default function Page() {
   inputMode="text"
   pattern="[0-9:]*"
   autoComplete="off"
-  ...
 />
 
                 </label>
