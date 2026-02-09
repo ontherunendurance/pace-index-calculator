@@ -194,6 +194,8 @@ export default function Page() {
   const [piStr, setPiStr] = useState("61");
 
   const resultsRef = useRef<HTMLDivElement | null>(null);
+  const phoneCaptureRef = useRef<HTMLDivElement | null>(null);
+
 
   const selected = useMemo(() => {
     if (inputMode === "pi") {
@@ -459,25 +461,46 @@ export default function Page() {
 
             <button
               onClick={async () => {
-                if (!selected || !resultsRef.current) return;
+                if (!selected || !phoneCaptureRef.current) return;
 
-                const node = resultsRef.current;
+const node = phoneCaptureRef.current;
 
-                // iPhone-ish capture width
-                const prevWidth = node.style.width;
-                const prevMaxWidth = node.style.maxWidth;
-                node.style.width = "390px";
-                node.style.maxWidth = "390px";
+// Save existing styles
+const prev = {
+  width: node.style.width,
+  maxWidth: node.style.maxWidth,
+  height: node.style.height,
+  maxHeight: node.style.maxHeight,
+  overflow: node.style.overflow,
+  padding: node.style.padding,
+  background: node.style.background,
+  borderRadius: node.style.borderRadius,
+};
 
-                const dataUrl = await toPng(node, { cacheBust: true, pixelRatio: 2, backgroundColor: "#ffffff" });
+// Force iPhone-sized frame
+node.style.width = "390px";
+node.style.maxWidth = "390px";
+node.style.height = "844px";
+node.style.maxHeight = "844px";
+node.style.overflow = "hidden";
+node.style.padding = "12px";
+node.style.background = "#ffffff";
+node.style.borderRadius = "16px";
 
-                node.style.width = prevWidth;
-                node.style.maxWidth = prevMaxWidth;
+const dataUrl = await toPng(node, {
+  cacheBust: true,
+  pixelRatio: 2,
+  backgroundColor: "#ffffff",
+});
 
-                const link = document.createElement("a");
-                link.download = `${mode}-PaceIndex-${selected.paceIndex}.png`;
-                link.href = dataUrl;
-                link.click();
+// Restore styles
+Object.assign(node.style, prev);
+
+const link = document.createElement("a");
+link.download = `PaceIndex-${selected.paceIndex}.png`;
+link.href = dataUrl;
+link.click();
+
               }}
               disabled={!canSave}
               style={{
@@ -513,7 +536,10 @@ export default function Page() {
                   ? `Input: ${distance.toUpperCase()} ${timeStr}`
                   : `Input: Pace Index ${selected.paceIndex}`}
               </div>
-              {content}
+              <div ref={phoneCaptureRef}>
+  {content}
+</div>
+
             </>
           ) : (
             <div style={{ color: "#666" }}>
