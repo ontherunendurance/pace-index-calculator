@@ -464,9 +464,11 @@ export default function Page() {
                 if (!selected || !phoneCaptureRef.current) return;
 
 const node = phoneCaptureRef.current;
+const inner = node.querySelector("#phoneCaptureInner") as HTMLDivElement;
+if (!inner) return;
 
 // Save existing styles
-const prev = {
+const prevNode = {
   width: node.style.width,
   maxWidth: node.style.maxWidth,
   height: node.style.height,
@@ -477,15 +479,31 @@ const prev = {
   borderRadius: node.style.borderRadius,
 };
 
-// Force iPhone-sized frame
-node.style.width = "390px";
-node.style.maxWidth = "390px";
-node.style.height = "844px";
-node.style.maxHeight = "844px";
+const prevInner = {
+  transform: inner.style.transform,
+  transformOrigin: inner.style.transformOrigin,
+};
+
+// Target iPhone size
+const TARGET_WIDTH = 390;
+const TARGET_HEIGHT = 844;
+
+// Apply phone frame
+node.style.width = `${TARGET_WIDTH}px`;
+node.style.maxWidth = `${TARGET_WIDTH}px`;
+node.style.height = `${TARGET_HEIGHT}px`;
+node.style.maxHeight = `${TARGET_HEIGHT}px`;
 node.style.overflow = "hidden";
 node.style.padding = "12px";
 node.style.background = "#ffffff";
 node.style.borderRadius = "16px";
+
+// Measure and scale inner content
+const innerHeight = inner.scrollHeight;
+const scale = Math.min(1, (TARGET_HEIGHT - 24) / innerHeight);
+
+inner.style.transform = `scale(${scale})`;
+inner.style.transformOrigin = "top center";
 
 const dataUrl = await toPng(node, {
   cacheBust: true,
@@ -494,12 +512,14 @@ const dataUrl = await toPng(node, {
 });
 
 // Restore styles
-Object.assign(node.style, prev);
+Object.assign(node.style, prevNode);
+Object.assign(inner.style, prevInner);
 
 const link = document.createElement("a");
 link.download = `PaceIndex-${selected.paceIndex}.png`;
 link.href = dataUrl;
 link.click();
+
 
               }}
               disabled={!canSave}
@@ -537,8 +557,11 @@ link.click();
                   : `Input: Pace Index ${selected.paceIndex}`}
               </div>
               <div ref={phoneCaptureRef}>
-  {content}
+  <div id="phoneCaptureInner">
+    {content}
+  </div>
 </div>
+
 
             </>
           ) : (
